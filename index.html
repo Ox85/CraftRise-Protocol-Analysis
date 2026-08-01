@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CraftRise-Protocol-Analysis — RiseClient 1.8.9</title>
+  <meta name="description" content="RiseClient 1.8.9 istemcisinin CraftRise sunucularıyla konuştuğu Java tarafı protokolün notları. Tamamen eğitim ve araştırma amaçlıdır." />
+  <meta name="author" content="Ox85" />
+  <meta property="og:title" content="CraftRise-Protocol-Analysis" />
+  <meta property="og:description" content="RiseClient 1.8.9 Java tarafı protokol reverse engineering notları." />
+  <meta property="og:url" content="https://Ox85.github.io/CraftRise-Protocol-Analysis/" />
+  <link rel="icon" type="image/png" href="assets/img/craftrise-logo.png" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+
+<div class="topbar">
+  <button class="menu-toggle" id="menu-toggle" aria-label="Menüyü aç">&#9776;</button>
+  <a class="topbar-brand" href="#">
+    <img class="brand-logo" src="assets/img/craftrise-logo.png" alt="CraftRise" />
+    <span class="brand-text">Client Protokol Notları</span>
+  </a>
+  <span class="topbar-divider"></span>
+  <div class="topbar-search">
+    <div class="search-wrapper">
+      <span class="search-icon">&#128269;</span>
+      <input type="text" id="search-input" placeholder="Bölüm ara..." autocomplete="off" spellcheck="false" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+  <div class="topbar-meta">
+    <span class="badge badge-version">RiseClient 1.8.9</span>
+  </div>
+</div>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Genel</div>
+      <a class="sidebar-link" href="#overview">
+        <span class="num">01</span> Giriş
+      </a>
+      <a class="sidebar-link" href="#infra">
+        <span class="num">02</span> Sunucu Altyapısı
+      </a>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Şifreleme</div>
+      <a class="sidebar-link" href="#aes-keys">
+        <span class="num">03</span> AES Anahtarları
+      </a>
+      <a class="sidebar-link" href="#blob-structure">
+        <span class="num">07</span> Blob JSON Yapısı
+      </a>
+      <a class="sidebar-link" href="#name-hash">
+        <span class="num">08</span> nameHash Algoritması
+      </a>
+      <a class="sidebar-link" href="#rac-guard">
+        <span class="num">09</span> racGuardKey
+      </a>
+      <a class="sidebar-link" href="#string-obfuscation">
+        <span class="num">12</span> String Obfuscation
+      </a>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Kimlik Doğrulama</div>
+      <a class="sidebar-link" href="#auth">
+        <span class="num">04</span> tryLogin Akışı
+      </a>
+      <a class="sidebar-link" href="#session">
+        <span class="num">05</span> Session Kanalları
+      </a>
+      <a class="sidebar-link" href="#handshake">
+        <span class="num">06</span> C00Handshake
+      </a>
+      <a class="sidebar-link" href="#handshake-wire">
+        <span class="num">13</span> Wire Format Örneği
+      </a>
+      <a class="sidebar-link" href="#session-importance">
+        <span class="num">14</span> Session Doğruluk Notu
+      </a>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Diğer Alanlar</div>
+      <a class="sidebar-link" href="#runtime-key">
+        <span class="num">10</span> runtimeKey
+      </a>
+      <a class="sidebar-link" href="#static-fields">
+        <span class="num">11</span> Statik Alanlar
+      </a>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Referans</div>
+      <a class="sidebar-link" href="#deobfuscated">
+        <span class="num">15</span> Deobfuscate Değerler
+      </a>
+      <a class="sidebar-link" href="#impl">
+        <span class="num">16</span> Pseudo-code
+      </a>
+      <a class="sidebar-link" href="#notes">
+        <span class="num">17</span> Ek Notlar
+      </a>
+    </div>
+
+  </nav>
+
+  <div class="main">
+    <div class="content">
+
+      <div class="breadcrumb">
+        <a href="https://github.com/Ox85/CraftRise-Protocol-Analysis" target="_blank" rel="noopener">Ox85</a>
+        <span class="breadcrumb-sep">/</span>
+        <a href="https://github.com/Ox85/CraftRise-Protocol-Analysis" target="_blank" rel="noopener">CraftRise-Protocol-Analysis</a>
+        <span class="breadcrumb-sep">/</span>
+        <span>Protokol Notları</span>
+      </div>
+
+      <div class="page-header">
+        <div class="page-eyebrow">Reverse Engineering</div>
+        <h1 class="page-title">RiseClient 1.8.9 — Java Tarafı Protokol Notları</h1>
+        <p class="page-desc">
+          RiseClient 1.8.9 (MCP 918 tabanlı) istemcisinin CraftRise oyun sunucularıyla nasıl
+          konuştuğuna dair Java tarafındaki tespitler. Notlar, JAR'ın statik analizi ve trafiğin
+          PCAP kaydından çıkarıldı. Amaç, protokolün kendisini anlamak; bir şey klonlamak değil.
+        </p>
+      </div>
+
+      <div class="notice notice-warn">
+        <div>
+          <strong>Tamamen eğitim ve araştırma amaçlıdır.</strong> Burada anlatılanlar sadece
+          protokolün Java katmanına dair notlardır. Ne bir bypass rehberi, ne bir launcher
+          klonlama kılavuzudur. Tüm buradaki bilgiler public olarak yayınlanmış istemcinin
+          statik analizinden elde edildi. Bu belgenin CraftRise'ın Kullanım Şartları'na aykırı
+          herhangi bir amaçla kullanılması <u>tavsiye edilmez</u>, kullananların sorumluluğu
+          kendine aittir. Yazar sadece dokümantasyon paylaşıyor.
+        </div>
+      </div>
+
+      <div class="section" data-section="overview" id="overview">
+        <h2 class="section-title">01 — Giriş <a class="anchor" href="#overview">#</a></h2>
+        <p>
+          Bu döküman, RiseClient 1.8.9 (MCP 918 tabanlı Minecraft istemcisi) ile CraftRise
+          sunucuları arasında geçen ağ trafiğinin ve JAR'ın içinde bulunan protokol katmanlarının
+          notlarıdır. İstemci; obfuscated sınıflar, katmanlı AES şifreleme, base64 katmanları,
+          Netty tabanlı özel bir JSON kanal protokolü ve genişletilmiş bir Minecraft handshake
+          paketi kullanır. Aşağıda tüm bu parçalar tek tek açılıp deobfuscate edilmiş halleriyle
+          verilmiştir.
+        </p>
+
+        <p>
+          Belge iki temel amaç için hazırlandı: (1) protokolü anlamak isteyen bir okuyucunun
+          yalnızca bu sayfayı okuyarak akışı zihninde canlandırabilmesi, (2) bu HTML doğrudan
+          bir dil modeline verildiğinde, modelin isim/alan/algoritma seviyesinde tam bir bağlam
+          elde edebilmesi. Bu yüzden anahtar değerleri, sabitler, JSON şablonları ve wire
+          format tabloları olabildiğince açık verilmiştir.
+        </p>
+      </div>
+
+      <div class="section" data-section="infra" id="infra">
+        <h2 class="section-title">02 — Sunucu Altyapısı <a class="anchor" href="#infra">#</a></h2>
+
+        <h3 class="subsection-title">2.1 Auth Sunucusu</h3>
+        <div class="key-val-block">
+          <div class="kv-row">
+            <div class="kv-key">Adres</div>
+            <div class="kv-val">185.255.92.10:4754</div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-key">Protokol</div>
+            <div class="kv-val">Netty ObjectEncoder / ObjectDecoder — Java Object Serialization üzerinde String JSON</div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-key">Rol</div>
+            <div class="kv-val">tryLogin isteğini işler ve session token'larını döndürür</div>
+          </div>
+        </div>
+
+        <h3 class="subsection-title">2.2 Oyun Sunucuları</h3>
+        <p>Birden fazla makinede farklı portlarda çalışır; her lobby ayrı bir process'tir. Sunucu <code>getAvailableLobby</code> isteğine random / round-robin ile atama yapar.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>IP</th><th>Port Aralığı</th><th>Örnek</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>185.255.92.9</td><td>31X</td><td>Lobi13 → 313, Lobi17 → 317, Lobi20 → 320</td></tr>
+              <tr><td>185.255.92.10</td><td>300X</td><td>Lobi1 → 3001, Lobi7 → 3007</td></tr>
+              <tr><td>185.255.92.4</td><td>—</td><td>Ek makine</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="subsection-title">2.3 Aynı Anda Kaç TCP Bağlantısı?</h3>
+        <p>Bir oturumda eş zamanlı <strong>dört TCP bağlantısı</strong> açılır:</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Hedef</th><th>Protokol</th><th>Görev</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>185.255.92.10:4754 <span class="tag tag-yellow">kısa ömürlü</span></td>
+                <td>Netty JSON</td>
+                <td>tryLogin isteği</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>185.255.92.10:4754 <span class="tag tag-blue">kalıcı</span></td>
+                <td>Netty JSON</td>
+                <td>introduction / getAvailableLobby / getHashsCrypted</td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>Lobby IP:4754 <span class="tag tag-blue">kalıcı</span></td>
+                <td>Netty JSON</td>
+                <td>alive keepalive (5 sn periyot)</td>
+              </tr>
+              <tr>
+                <td>4</td>
+                <td>Lobby IP:port <span class="tag tag-blue">kalıcı</span></td>
+                <td>Minecraft 1.8</td>
+                <td>Oyun bağlantısı (genişletilmiş C00Handshake)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="notice notice-info">
+          <div>
+            Atanmış lobby IP'si <code>185.255.92.10</code>'dan farklıysa, <code>getAvailableLobby</code> mesajları
+            hem auth server'a hem de lobby IP'sinin 4754 portuna gönderilir.
+          </div>
+        </div>
+      </div>
+
+      <div class="section" data-section="aes-keys" id="aes-keys">
+        <h2 class="section-title">03 — AES Anahtarları <a class="anchor" href="#aes-keys">#</a></h2>
+        <p>Tüm anahtarlar 16 karakter uzunluğunda ve <code>AES/ECB/PKCS5Padding</code> ile kullanılıyor. Aşağıdaki tablo, JAR'daki obfuscated sabitlerden decrypt edilen ham değerleri gösterir.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>İsim</th><th>Değer (16 byte)</th><th>Kullanım</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>DEFAULT</td><td>2650053489059452</td><td>Auth key, keyValidator, lobby response decrypt</td></tr>
+              <tr><td>INNER</td><td>2650053419059452</td><td>Blob iç AES katmanı</td></tr>
+              <tr><td>OUTER</td><td>2650053417028341</td><td>Blob dış AES katmanı</td></tr>
+              <tr><td>CLIENT_MSG</td><td>1234758145215632</td><td>Launcher IPC mesajları için</td></tr>
+              <tr><td>NAMEHASH</td><td>2650053489028332</td><td>Blob içindeki nameHash alanı</td></tr>
+              <tr><td>SESSION</td><td>2650053406013170</td><td>val2 hash öncesi blob şifrelemesi</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section" data-section="auth" id="auth">
+        <h2 class="section-title">04 — tryLogin Protokolü <a class="anchor" href="#auth">#</a></h2>
+
+        <h3 class="subsection-title">4.1 İstek Payload'u</h3>
+        <p>Kısa ömürlü bir TCP bağlantısı üzerinden gönderilir; cevap alındıktan sonra sunucu bağlantıyı kapatır.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>{
+  "messageType": "tryLogin",
+  "datas": {
+    "sumBigX":         "&lt;md5&gt;",
+    "password":        "&lt;plaintext_password&gt;",
+    "sumBig":          "&lt;md5&gt;",
+    "sumBigY":         "&lt;md5&gt;",
+    "sum":             "&lt;md5&gt;",
+    "key":             "&lt;b64_wrapped_aes&gt;",
+    "username":        "&lt;username&gt;",
+    "staticSessionKey": ""
+  }
+}</code></pre>
+        </div>
+
+        <h3 class="subsection-title">4.2 Hash Zinciri</h3>
+        <div class="flow-diagram">
+          <div class="flow-step"><span class="flow-arrow">→</span><span><span class="flow-op">key</span> = b64( AES( DEFAULT, AES( DEFAULT, b64( username + "###" + md5(password) + "###" + millis ) ) ) )</span></div>
+          <div class="flow-step"><span class="flow-arrow">→</span><span><span class="flow-op">sum</span> = md5(key)</span></div>
+          <div class="flow-step"><span class="flow-arrow">→</span><span><span class="flow-op">sumBig</span> = md5( sum + username + "....." )</span></div>
+          <div class="flow-step"><span class="flow-arrow">→</span><span><span class="flow-op">sumBigX</span> = md5( "......" + sumBig + "......" )</span></div>
+          <div class="flow-step"><span class="flow-arrow">→</span><span><span class="flow-op">sumBigY</span> = md5( "craftrise#" + username )</span></div>
+        </div>
+
+        <h3 class="subsection-title">4.3 Cevap Payload'u</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>{
+  "messageType":       "tryLogin",
+  "status":            "true",
+  "username":          "&lt;username&gt;",
+  "playerRankId":      &lt;int&gt;,
+  "password":          "&lt;plaintext_password&gt;",
+  "skinURL":           "&lt;url&gt;",
+  "keyValidator":      "&lt;multi_layer_aes_encoded&gt;",
+  "staticSessionKey":  "&lt;uuid&gt;",
+  "globalSessionHash": "&lt;108_char_b64&gt;"
+}</code></pre>
+        </div>
+
+        <h3 class="subsection-title">4.4 keyValidator Deşifresi</h3>
+        <div class="layer-chain">
+          <div class="layer-item"><span class="layer-num">1</span><span class="layer-op">keyValidator</span><span class="layer-text"> → raw ciphertext</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">2</span><span class="layer-text">AES_DECRYPT( <span class="layer-op">DEFAULT</span>, raw ) → s1</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">3</span><span class="layer-text">b64_decode( s1 ) → s2</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">4</span><span class="layer-text">AES_DECRYPT( <span class="layer-op">DEFAULT</span>, s2 ) → s3</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">5</span><span class="layer-text">AES_DECRYPT( <span class="layer-op">DEFAULT</span>, s3 ) → s4</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">6</span><span class="layer-text">b64_decode( s4 ) → <span class="layer-op">"&lt;username&gt;###&lt;uuid_no_dashes&gt;###&lt;millis&gt;"</span></span></div>
+        </div>
+
+        <h3 class="subsection-title">4.5 Hata Kodları</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Kod</th><th>Anlam</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>4</td><td>Yanlış şifre</td></tr>
+              <tr><td>11</td><td>Hesap aktivasyonu gerekli</td></tr>
+              <tr><td>12</td><td>Kullanıcı zaten oyunda</td></tr>
+              <tr><td>14</td><td>E-posta doğrulaması gerekli</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section" data-section="session" id="session">
+        <h2 class="section-title">05 — Kalıcı Session Kanalları <a class="anchor" href="#session">#</a></h2>
+        <p><code>tryLogin</code> cevabı alındıktan sonra istemci yeni bir TCP bağlantısı açar ve oturum boyunca açık tutar. Bu bağlantı olmadan oyun sunucusu C00Handshake'i reddeder — buraya dikkat.</p>
+
+        <h3 class="subsection-title">5.1 Introduction Mesajı</h3>
+        <p>Yeni açılan packet channel'a ilk gönderilen mesaj. <code>packetContent</code> içindeki <code>fake_&lt;random&gt;:0</code> alanları anti-debug amaçlı gürültüdür; sunucu tarafından okunmaz.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>{
+  "messageType": "packet",
+  "packetContent": "{\"fake_60894048\":0,\"data\":\"{\\\"init\\\":true,\\\"password\\\":\\\"&lt;PASSWORD&gt;\\\",\\\"username\\\":\\\"&lt;USERNAME&gt;\\\"}\",\"fake_82729880\":0,\"fake_99858660\":0,\"channel\":\"introduction\",\"fake_59855487\":0,\"fake_21228190\":0,\"fake_79391757\":0,\"fake_38971509\":0,\"fake_53608396\":0,\"fake_91197214\":0,\"fake_62827185\":0,\"fake_9946018\":0}",
+  "packetName": "PacketRequest"
+}</code></pre>
+        </div>
+
+        <h3 class="subsection-title">5.2 Diğer Mesajlar</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>{"messageType":"getAvailableLobby","playerName":"&lt;username&gt;"}
+{"messageType":"getHashsCrypted","playerName":"&lt;username&gt;"}
+{"messageType":"alive"}</code></pre>
+        </div>
+        <div class="notice notice-info">
+          <div>
+            Introduction + getAvailableLobby + getHashsCrypted mesajları channel açıldığında tek seferde gönderilir, ardından her <strong>3 saniyede bir</strong> polling yapılır. <code>alive</code> keepalive ise oyun sunucusunun 4754 portundaki ayrı bağlantıda her <strong>5 saniyede bir</strong> gönderilir.
+          </div>
+        </div>
+
+        <h3 class="subsection-title">5.3 Wire Format (Netty ObjectEncoder)</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Binary Format</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>[4 byte big-endian length] [0x05 STREAM_VERSION] [0x74 TC_STRING]
+[2 byte UTF length] [UTF-8 bytes of JSON]</code></pre>
+        </div>
+        <p>Örnek — <code>{"messageType":"alive"}</code> (23 karakter) için üretilen 31 byte:</p>
+        <div class="hex-display">
+          <span class="hex-byte">00 00 00 1b</span> <span class="hex-comment"># length = 27</span><br/>
+          <span class="hex-byte">05</span>             <span class="hex-comment"># STREAM_VERSION</span><br/>
+          <span class="hex-byte">74</span>             <span class="hex-comment"># TC_STRING</span><br/>
+          <span class="hex-byte">00 17</span>          <span class="hex-comment"># UTF length = 23</span><br/>
+          <span class="hex-byte">7b 22 6d 65 73 73 61 67 65 54 79 70 65 22 3a 22 61 6c 69 76 65 22 7d</span>  <span class="hex-comment"># {"messageType":"alive"}</span>
+        </div>
+
+        <h3 class="subsection-title">5.4 getAvailableLobby Cevabı</h3>
+        <p>Cevaptaki <code>data</code> alanı <strong>5 katmanlı</strong> bir encoding içerir:</p>
+        <div class="layer-chain">
+          <div class="layer-item"><span class="layer-num">1</span><span class="layer-text">data → <span class="layer-op">base64 decode</span> (hâlâ base64)</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">2</span><span class="layer-text"><span class="layer-op">base64 decode</span> → <code>"3ebi2mclmAM7Ao2&lt;inner&gt;KweGTngiZOOj9d6"</code> → prefix/suffix strip</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">3</span><span class="layer-text"><span class="layer-op">base64 decode</span> inner (hâlâ base64)</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">4</span><span class="layer-text"><span class="layer-op">base64 decode</span> → AES ciphertext</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">5</span><span class="layer-text"><span class="layer-op">AES_DECRYPT( DEFAULT )</span> → JSON</span></div>
+        </div>
+        <p>Nihai JSON şu şekilde çıkar:</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>{
+  "SESSION_HASH": "&lt;108_char_b64&gt;",
+  "AVAILABLE_SERVER": {
+    "serverAddress": "&lt;lobby_ip&gt;",
+    "serverName":    "Lobi&lt;N&gt;",
+    "serverPort":    "&lt;port_str&gt;"
+  },
+  "OLD_CHUNK_PACKETS": []
+}</code></pre>
+        </div>
+
+        <h3 class="subsection-title">5.5 getHashsCrypted Cevabı</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>{
+  "messageType": "getHashsCrypted",
+  "data": "{\"signature\":\"&lt;32_hex&gt;whatthefuck\",\"key\":\"&lt;base64_libraries_json&gt;\"}"
+}</code></pre>
+        </div>
+        <div class="notice notice-info">
+          <div>
+            <code>key</code> alanı base64 decode edildiğinde <code>{"LIBRARIES":{"jar_name":"sha1", ...}}</code> yapısı çıkar.
+            <code>signature</code> sonundaki <code>whatthefuck</code> literal string, bariz bir geliştirici şakası — sabit olarak eklenmiş.
+          </div>
+        </div>
+      </div>
+
+      <div class="section" data-section="handshake" id="handshake">
+        <h2 class="section-title">06 — Genişletilmiş C00Handshake <a class="anchor" href="#handshake">#</a></h2>
+        <p>Standart Minecraft 1.8 C00Handshake paketine iki ek String alanı eklenmiş:</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Packet Structure</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>VarInt(protocolVersion = 47)
+String(serverAddress)      ← blob JSON'daki serverAddress ile birebir aynı
+Short(port)                ← blob JSON'daki port ile birebir aynı
+VarInt(nextState = 2 LOGIN)
+String(handshakeBlob)      ← {"1":"&lt;encBlob&gt;","2":"&lt;blobHash&gt;"}
+String(passwordToken)      ← base64(password)</code></pre>
+        </div>
+        <p>Hemen ardından standart <code>C00PacketLoginStart</code> paketi gönderilir.</p>
+      </div>
+
+      <div class="section" data-section="blob-structure" id="blob-structure">
+        <h2 class="section-title">07 — Blob JSON Yapısı <a class="anchor" href="#blob-structure">#</a></h2>
+
+        <h3 class="subsection-title">7.1 Şifreleme Zinciri (istemci → sunucu)</h3>
+        <div class="layer-chain">
+          <div class="layer-item"><span class="layer-num">1</span><span class="layer-text">plaintext_json → <span class="layer-op">base64 encode</span></span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">2</span><span class="layer-text"><code>BLOB_PREFIX</code> + b64 + <code>BLOB_SUFFIX</code> <span style="color:var(--text-muted)">( "3ebi2mclmAM7Ao2" / "KweGTngiZOOj9d6" )</span></span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">3</span><span class="layer-text"><span class="layer-op">base64 encode</span></span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">4</span><span class="layer-text"><span class="layer-op">base64 encode</span></span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">5</span><span class="layer-text"><span class="layer-op">AES( INNER )</span></span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">6</span><span class="layer-text"><span class="layer-op">base64 encode</span></span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">7</span><span class="layer-text"><span class="layer-op">AES( OUTER )</span></span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">8</span><span class="layer-text"><span class="layer-op">base64 encode</span> = <strong>encBlob (val1)</strong></span></div>
+        </div>
+
+        <h3 class="subsection-title">7.2 Sarmalayıcı (val2 Hesabı)</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>{
+  "1": "&lt;encBlob&gt;",
+  "2": "&lt;MD5( base64( AES_ECB(SESSION_KEY, encBlob) ) )&gt;"
+}</code></pre>
+        </div>
+        <p><code>val2</code>, <code>val1</code>'in SESSION anahtarıyla şifrelenip base64'lenmiş halinin MD5 hex'idir. İlk denemede yanlış tahmin edilebilecek bir detay — server'ın beklediği tam formül budur.</p>
+
+        <h3 class="subsection-title">7.3 Blob JSON Alanları</h3>
+        <p>Underlying map <code>java.util.HashMap</code> alt sınıfı olduğundan alan sırası hash bazlıdır — server için sıra önemsizdir.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Alan</th><th>Değer / Kaynak</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>"3"</td><td>"0110101110" (sabit)</td></tr>
+              <tr><td>"4"</td><td>"1" (sabit)</td></tr>
+              <tr><td>"5"</td><td>"6" (sabit)</td></tr>
+              <tr><td>key</td><td>"D4R3LSPR1N5S" (sabit)</td></tr>
+              <tr><td>name</td><td>Kullanıcı adı</td></tr>
+              <tr><td>nameHash</td><td>AES şifreli (bkz. 08)</td></tr>
+              <tr><td>serverAddress</td><td>Lobby cevabından dinamik</td></tr>
+              <tr><td>port</td><td>Lobby cevabından dinamik (int)</td></tr>
+              <tr><td>proxyPort</td><td>14828 (sabit)</td></tr>
+              <tr><td>clientHash</td><td>RiseClient JAR'ının SHA-1'i</td></tr>
+              <tr><td>sessionHash</td><td>UUID.randomUUID() — istemci tarafında rastgele</td></tr>
+              <tr><td>globalSessionHash</td><td>tryLogin cevabından</td></tr>
+              <tr><td>launcherKeys</td><td>Sabit base64 token (bkz. 7.5)</td></tr>
+              <tr><td>racGuardKey</td><td>"QUBENZ1136ZyefHJB213BV21HABnsf" (bkz. 09)</td></tr>
+              <tr><td>racGuardKey2</td><td>"QUBENZ2136LyefBJB2l3BV21HABnst" (sabit)</td></tr>
+              <tr><td>racGuardKey3</td><td>"QUBENZ2136LyefBJB213BV2lHABnst" (sabit)</td></tr>
+              <tr><td>language</td><td>"0"</td></tr>
+              <tr><td>language_id</td><td>711747</td></tr>
+              <tr><td>runtime</td><td>Alt-obje (bkz. 7.4)</td></tr>
+              <tr><td>runtimeKey</td><td>&lt;discord_user_id&gt;###&lt;discord_username&gt; (bkz. 10)</td></tr>
+              <tr><td>mAd</td><td>Donanım/ağ parmak izi (nested JSON string)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="subsection-title">7.4 runtime Alt-Objesi</h3>
+        <p><code>crsecond/Ǯ.ϕ()</code> methodu tarafından üretilir. Sadece 6 alan içerir; ek donanım alanı beklenmez.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>{
+  "raclogs":        [],
+  "racstatus":      false,
+  "racerrorcode":   -1,
+  "racstepcurrent": 0,
+  "ractotaltime":   0,
+  "racpacketsent":  false
+}</code></pre>
+        </div>
+        <div class="notice notice-danger">
+          <div><strong>Not:</strong> <code>runtime</code> nesnesine cpumodel, gpumodel gibi ek donanım alanları eklemek anlamsız — beklenen yapı yalnızca yukarıdaki 6 anahtardan oluşuyor.</div>
+        </div>
+
+        <h3 class="subsection-title">7.5 launcherKeys Sabit Değeri</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Base64 Token</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>kffvBRbsgZKd8KFvqnqOGKpDppOxko96OEG8lhXCnINYNqR6OaA9Rok0XqF9a4nicG7KXD+WatD4Tedk4uFfWlIqyMfjXGa7ow49nyTNcuo=</code></pre>
+        </div>
+      </div>
+
+      <div class="section" data-section="name-hash" id="name-hash">
+        <h2 class="section-title">08 — nameHash Algoritması <a class="anchor" href="#name-hash">#</a></h2>
+        <p>Bytecode'da doğrulandı. Method içindeki <code>iload_2, iconst_1, iadd</code> sırası, port değerini 1 arttırıyor:</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Algorithm</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>plaintext = username + clientHash + String.valueOf(port + 1) + serverAddress
+nameHash  = base64( AES_ECB(NAMEHASH_KEY, plaintext) )</code></pre>
+        </div>
+        <div class="notice notice-danger">
+          <div>
+            <strong>port + 1:</strong> Blob'daki <code>port</code> alanının bir fazlası kullanılır (bytecode'daki <code>iconst_1, iadd</code> sırasından geliyor). Küçük ama gözden kaçtığında blob'u geçersiz kılan bir detay.<br/><br/>
+            <strong>clientHash:</strong> Yüklü RiseClient JAR'ının SHA-1'idir — decompile edilmiş versiyon değil, orijinal encrypted versiyonun hash'i.
+          </div>
+        </div>
+        <p>Örnek — <code>username=Player123</code>, <code>clientHash=2177d15e...</code>, <code>port=3007</code>, <code>serverAddress=185.255.92.10</code></p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Örnek Plaintext</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>Player1232177d15e451be7c585382bf79c9bbbd6b27725a230081853.255.92.10</code></pre>
+        </div>
+      </div>
+
+      <div class="section" data-section="rac-guard" id="rac-guard">
+        <h2 class="section-title">09 — racGuardKey Placeholder Çözümü <a class="anchor" href="#rac-guard">#</a></h2>
+        <p>
+          Blob içindeki <code>racGuardKey</code> alanı map'e ilk yazıldığında değeri <code>"%RAC_GUARD_KEY%"</code> literalidir.
+          Şifrelemeden hemen önce <code>String.replaceAll("%RAC_GUARD_KEY%", &lt;gerçek_değer&gt;)</code> çağrısıyla değiştirilir.
+        </p>
+        <p>Gerçek değer JAR'da 64 elemanlı bir <code>long[]</code> dizisinde şifreli saklanır. Deobfuscate adımları:</p>
+        <div class="layer-chain">
+          <div class="layer-item"><span class="layer-num">1</span><span class="layer-text">Long dizisi (64 eleman)</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">2</span><span class="layer-text">Her element için: <span class="layer-op">byte = (long - 7) / 9000</span></span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">3</span><span class="layer-text">byte[64] → String → <span class="layer-op">base64 decode</span> → 48 byte ciphertext</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">4</span><span class="layer-text"><span class="layer-op">AES_DECRYPT( DEFAULT )</span> → "UVVCRU5aMTEzNlp5ZWZISkIyMTNCVjIxSEFCbnNm" (40 byte)</span></div>
+          <div class="layer-arrow-down">↓</div>
+          <div class="layer-item"><span class="layer-num">5</span><span class="layer-text"><span class="layer-op">base64 decode</span> → <strong>"QUBENZ1136ZyefHJB213BV21HABnsf"</strong> (30 byte)</span></div>
+        </div>
+        <div class="notice notice-success">
+          <div>Bu adımların çıktısı: <code>QUBENZ1136ZyefHJB213BV21HABnsf</code>. Placeholder yerine bu 30 byte'lık string doğrudan kullanılır.</div>
+        </div>
+      </div>
+
+      <div class="section" data-section="runtime-key" id="runtime-key">
+        <h2 class="section-title">10 — runtimeKey Formatı <a class="anchor" href="#runtime-key">#</a></h2>
+        <p><code>DiscordMod.lambda$init$0(DiscordUser)</code> methodunda set edilir:</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Format</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>runtimeKey = discordUser.userId + "###" + discordUser.username</code></pre>
+        </div>
+        <p>Discord bağlı değilse <code>&lt;clinit&gt;</code> tarafından atanan boş string olarak kalır. Sunucu boş değeri de kabul eder.</p>
+      </div>
+
+      <div class="section" data-section="static-fields" id="static-fields">
+        <h2 class="section-title">11 — Statik Alan Kaynakları <a class="anchor" href="#static-fields">#</a></h2>
+        <p><code>crsecond/Ͻ</code> sınıfındaki statik alanların blob'a nasıl aktığı:</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Bytecode Alanı</th><th>Blob Alanı</th><th>Kaynak</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>ø</td><td>sessionHash</td><td>&lt;clinit&gt;'te UUID.randomUUID().toString() — sonradan değişmez</td></tr>
+              <tr><td>Ҕ</td><td>globalSessionHash</td><td>&lt;clinit&gt;'te "" — channelRead0'da server cevabından doldurulur</td></tr>
+              <tr><td>ϊ</td><td>launcherKeys</td><td>&lt;clinit&gt;'te null — launcher --launcherKeys argümanından</td></tr>
+              <tr><td>ʗ</td><td>runtimeKey</td><td>&lt;clinit&gt;'te "" — DiscordMod tarafından güncellenir</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section" data-section="string-obfuscation" id="string-obfuscation">
+        <h2 class="section-title">12 — String Obfuscation <a class="anchor" href="#string-obfuscation">#</a></h2>
+        <p><code>crsecond/Ͻ</code> sınıfındaki string sabitleri runtime'da decrypt ediliyor. Şema:</p>
+        <div class="key-val-block">
+          <div class="kv-row">
+            <div class="kv-key">Algoritma</div>
+            <div class="kv-val">DES/CBC/PKCS5Padding, IV = zero</div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-key">Base field</div>
+            <div class="kv-val">f = 98049190020208 (static long)</div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-key">Her metot</div>
+            <div class="kv-val">var3 = f ^ method_xor_const</div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-key">Her invokedynamic</div>
+            <div class="kv-val">actual_long = CP_LONG ^ var3</div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-key">h[] index</div>
+            <div class="kv-val">h_index = sipush ^ (actual_long &amp; 0x7FFF) ^ 22253</div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-key">DES key</div>
+            <div class="kv-val">actual_long'un 8 byte'lık serialization'ı</div>
+          </div>
+        </div>
+        <p>Bu formülle <code>Ͻ.h</code> array'inden istenen decrypted string offline olarak çıkarılabilir.</p>
+      </div>
+
+      <div class="section" data-section="handshake-wire" id="handshake-wire">
+        <h2 class="section-title">13 — C00Handshake Wire Format Örneği <a class="anchor" href="#handshake-wire">#</a></h2>
+        <p>PCAP'ten alınan gerçek bir C00Handshake byte dizisi:</p>
+        <div class="hex-display">
+          <span class="hex-byte">8f 4e</span>                                            <span class="hex-comment"># VarInt length = 10015</span><br/>
+          <span class="hex-byte">00</span>                                               <span class="hex-comment"># packet ID = C00Handshake</span><br/>
+          <span class="hex-byte">2f</span>                                               <span class="hex-comment"># VarInt protocolVersion = 47</span><br/>
+          <span class="hex-byte">0c</span>                                               <span class="hex-comment"># VarInt string length = 12</span><br/>
+          <span class="hex-byte">31 38 35 2e 32 35 35 2e 39 32 2e 39</span>              <span class="hex-comment"># "185.255.92.9"</span><br/>
+          <span class="hex-byte">01 39</span>                                            <span class="hex-comment"># Short port = 313</span><br/>
+          <span class="hex-byte">02</span>                                               <span class="hex-comment"># VarInt nextState = 2 (LOGIN)</span><br/>
+          <span class="hex-byte">ee 4d</span>                                            <span class="hex-comment"># VarInt blob string length (~9966)</span><br/>
+          <span class="hex-byte">7b 22 31 22 3a ...</span>                               <span class="hex-comment"># {"1": ... (blob JSON)</span>
+        </div>
+      </div>
+
+      <div class="section" data-section="session-importance" id="session-importance">
+        <h2 class="section-title">14 — Session Kanallarının Önemi <a class="anchor" href="#session-importance">#</a></h2>
+        <p>
+          Oyun sunucusu C00Handshake'i kabul etmek için aynı IP adresinden aktif paralel session kanalları bekler.
+          Blob'un doğru yapıya sahip olması tek başına yetmiyor — kanalların aktif olması ve keepalive'ın atılıyor olması da şart.
+        </p>
+        <div class="notice notice-info">
+          <div>
+            Pratik olarak: packet channel ve keepalive bağlantıları hazır değilse handshake reddedilir. İlk sırayı bozarsanız server graceful <code>Disconnect</code> gönderiyor.
+          </div>
+        </div>
+      </div>
+
+      <div class="section" data-section="deobfuscated" id="deobfuscated">
+        <h2 class="section-title">15 — Deobfuscate Edilen Değerler Özeti <a class="anchor" href="#deobfuscated">#</a></h2>
+        <p>Yukarıdaki bölümlerde geçen ve orijinal JAR'da obfuscated / encrypted saklanan tüm sabitler, tek yerde açık halleriyle:</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Sabit</th><th>Deobfuscate Değeri</th><th>Nerede</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>AES_KEY_DEFAULT</td><td>2650053489059452</td><td>03 — AES Anahtarları</td></tr>
+              <tr><td>AES_KEY_INNER</td><td>2650053419059452</td><td>03 — AES Anahtarları</td></tr>
+              <tr><td>AES_KEY_OUTER</td><td>2650053417028341</td><td>03 — AES Anahtarları</td></tr>
+              <tr><td>AES_KEY_CLIENT_MSG</td><td>1234758145215632</td><td>03 — AES Anahtarları</td></tr>
+              <tr><td>AES_KEY_NAMEHASH</td><td>2650053489028332</td><td>03 — AES Anahtarları</td></tr>
+              <tr><td>AES_KEY_SESSION</td><td>2650053406013170</td><td>03 — AES Anahtarları</td></tr>
+              <tr><td>BLOB_PREFIX</td><td>3ebi2mclmAM7Ao2</td><td>07 — Blob JSON Yapısı</td></tr>
+              <tr><td>BLOB_SUFFIX</td><td>KweGTngiZOOj9d6</td><td>07 — Blob JSON Yapısı</td></tr>
+              <tr><td>racGuardKey</td><td>QUBENZ1136ZyefHJB213BV21HABnsf</td><td>09 — racGuardKey</td></tr>
+              <tr><td>racGuardKey2</td><td>QUBENZ2136LyefBJB2l3BV21HABnst</td><td>09 — racGuardKey</td></tr>
+              <tr><td>racGuardKey3</td><td>QUBENZ2136LyefBJB213BV2lHABnst</td><td>09 — racGuardKey</td></tr>
+              <tr><td>blob."key"</td><td>D4R3LSPR1N5S</td><td>07 — Blob Alanları</td></tr>
+              <tr><td>blob."3"</td><td>0110101110</td><td>07 — Blob Alanları</td></tr>
+              <tr><td>blob."4"</td><td>1</td><td>07 — Blob Alanları</td></tr>
+              <tr><td>blob."5"</td><td>6</td><td>07 — Blob Alanları</td></tr>
+              <tr><td>proxyPort</td><td>14828</td><td>07 — Blob Alanları</td></tr>
+              <tr><td>language_id</td><td>711747</td><td>07 — Blob Alanları</td></tr>
+              <tr><td>StringObf.f</td><td>98049190020208</td><td>12 — String Obfuscation</td></tr>
+              <tr><td>StringObf.h_index xor</td><td>22253</td><td>12 — String Obfuscation</td></tr>
+              <tr><td>auth server</td><td>185.255.92.10:4754</td><td>02 — Sunucu Altyapısı</td></tr>
+              <tr><td>launcherKeys token</td><td>kffvBRbsgZKd8KFvqnqOGKpDppOxko96OEG8lhXCnINYNqR6OaA9Rok0XqF9a4nicG7KXD+WatD4Tedk4uFfWlIqyMfjXGa7ow49nyTNcuo=</td><td>7.5</td></tr>
+              <tr><td>tryLogin sum salt</td><td>"....."</td><td>4.2 — Hash Zinciri</td></tr>
+              <tr><td>tryLogin sumBigX salt</td><td>"......"</td><td>4.2 — Hash Zinciri</td></tr>
+              <tr><td>tryLogin sumBigY prefix</td><td>"craftrise#"</td><td>4.2 — Hash Zinciri</td></tr>
+              <tr><td>getHashsCrypted sig son eki</td><td>whatthefuck</td><td>5.5</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="notice notice-info">
+          <div>Bu tablo, dokümanın geri kalanının hızlı bir referansı — bir dil modeline sadece bu bölüm bile verilse, tüm protokolün sabit yüzeyi elde edilir.</div>
+        </div>
+      </div>
+
+      <div class="section" data-section="impl" id="impl">
+        <h2 class="section-title">16 — Referans Pseudo-code <a class="anchor" href="#impl">#</a></h2>
+
+        <h3 class="subsection-title">16.1 Persistent Session Kanalı</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Java</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>NioEventLoopGroup group = new NioEventLoopGroup();
+Bootstrap b = new Bootstrap()
+    .group(group)
+    .channel(NioSocketChannel.class)
+    .handler(new ChannelInitializer&lt;SocketChannel&gt;() {
+        protected void initChannel(SocketChannel ch) {
+            ch.pipeline().addLast(
+                new ObjectDecoder(ClassResolvers.softCachingResolver(
+                    ClassLoader.getSystemClassLoader())),
+                new ObjectEncoder(),
+                new SimpleChannelInboundHandler&lt;Object&gt;() {
+                    public void channelActive(ChannelHandlerContext ctx) {
+                        sendIntroductionPacket(ctx.channel(), user, pass);
+                        sendSimplePacket(ctx.channel(), "getAvailableLobby", user);
+                        sendSimplePacket(ctx.channel(), "getHashsCrypted", user);
+                    }
+                    protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
+                        // parse lobby response, extract AVAILABLE_SERVER
+                    }
+                }
+            );
+        }
+    });
+Channel packetChan = b.connect("185.255.92.10", 4754).sync().channel();</code></pre>
+        </div>
+
+        <h3 class="subsection-title">16.2 Blob Şifreleme</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Java</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>static String encryptBlob(String jsonPayload) throws Exception {
+    String b64Json   = base64(jsonPayload);
+    String plaintext = BLOB_PREFIX + b64Json + BLOB_SUFFIX;
+    String enc1      = base64(plaintext);
+    String enc2      = base64(enc1);
+    byte[] aes1      = aesEncryptBytes(enc2.getBytes(UTF_8), AES_KEY_INNER);
+    String b64Aes1   = base64(aes1);
+    byte[] aes2      = aesEncryptBytes(b64Aes1.getBytes(UTF_8), AES_KEY_OUTER);
+    return base64(aes2);
+}</code></pre>
+        </div>
+
+        <h3 class="subsection-title">16.3 val2 Hesabı</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Java</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>String sessionEncrypted = aesEncryptStr(encBlob, AES_KEY_SESSION);
+String blobHash = md5hex(sessionEncrypted);
+String handshakeJson = "{\"1\":" + quote(encBlob) + ",\"2\":" + quote(blobHash) + "}";</code></pre>
+        </div>
+
+        <h3 class="subsection-title">16.4 Lobby Response Decode</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Java</span>
+            <button class="copy-btn">Kopyala</button>
+          </div>
+          <pre><code>String data = /* extract from getAvailableLobby response */;
+String s = data;
+for (int round = 0; round &lt; 5; round++) {
+    byte[] bytes = base64Decode(s);
+    String next  = new String(bytes, UTF_8);
+    boolean printable = allPrintableAscii(bytes);
+    if (!printable) {
+        String json = new String(aesDecrypt(bytes, AES_KEY_DEFAULT), UTF_8);
+        parseAndUse(json);
+        break;
+    }
+    if (next.startsWith(BLOB_PREFIX) &amp;&amp; next.endsWith(BLOB_SUFFIX)) {
+        s = next.substring(BLOB_PREFIX.length(),
+                           next.length() - BLOB_SUFFIX.length());
+    } else {
+        s = next;
+    }
+}</code></pre>
+        </div>
+      </div>
+
+      <div class="section" data-section="notes" id="notes">
+        <h2 class="section-title">17 — Ek Notlar <a class="anchor" href="#notes">#</a></h2>
+        <ul>
+          <li>Blob JSON alan sırası server tarafında önemsizdir (HashMap serialization).</li>
+          <li><code>val2</code> için ilk bakışta <code>md5(keyValidator_uuid)</code> gibi görünse de doğru formül <code>md5(base64(AES(SESSION, val1)))</code>.</li>
+          <li>Oyun sunucusu portu dinamiktir: <code>getAvailableLobby</code> cevabından okunması şart.</li>
+          <li>Blob'daki <code>serverAddress</code> ve <code>port</code> de dinamiktir; blob içindeki değerler kullanılan gerçek target ile birebir uyumlu olmalıdır.</li>
+          <li><code>nameHash</code> içindeki <code>port + 1</code> küçük ama kritik bir detay — bytecode'daki <code>iconst_1, iadd</code> sırasına dikkat.</li>
+          <li><code>runtime</code> nested objesi sadece 6 <code>rac-*</code> alanı içermelidir. Ek donanım alanları eklemek blob'u geçersiz kılar.</li>
+          <li>Bu belge deliberately Java katmanının notlarıyla sınırlıdır — istemcinin çalışması için var olan diğer bileşenler (native modüller vs.) kapsam dışı.</li>
+        </ul>
+
+        <div class="notice notice-warn">
+          <div>
+            <strong>Tekrar hatırlatma:</strong> Bu döküman tamamen eğitim ve reverse engineering çalışması amacıyla yazılmıştır.
+            İçerik CraftRise'a saldırmak, sunucularına yetkisiz erişmek veya ToS'u ihlal etmek için değildir.
+            Yazar sadece protokolün nasıl işlediğini belgeleyip paylaşıyor; kullanım tamamen okuyucunun sorumluluğundadır.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <aside class="toc-panel">
+      <div class="toc-title">Bu Sayfada</div>
+      <ul class="toc-list">
+        <li><a href="#overview">Giriş</a></li>
+        <li><a href="#infra">Sunucu Altyapısı</a></li>
+        <li><a href="#aes-keys">AES Anahtarları</a></li>
+        <li><a href="#auth">tryLogin</a></li>
+        <li><a href="#session">Session Kanalları</a></li>
+        <li><a href="#handshake">C00Handshake</a></li>
+        <li><a href="#blob-structure">Blob JSON</a></li>
+        <li><a href="#name-hash">nameHash</a></li>
+        <li><a href="#rac-guard">racGuardKey</a></li>
+        <li><a href="#runtime-key">runtimeKey</a></li>
+        <li><a href="#static-fields">Statik Alanlar</a></li>
+        <li><a href="#string-obfuscation">String Obfuscation</a></li>
+        <li><a href="#handshake-wire">Wire Format</a></li>
+        <li><a href="#session-importance">Session Önemi</a></li>
+        <li><a href="#deobfuscated">Deobfuscate Özet</a></li>
+        <li><a href="#impl">Pseudo-code</a></li>
+        <li><a href="#notes">Ek Notlar</a></li>
+      </ul>
+    </aside>
+  </div>
+
+</div>
+
+<button class="back-to-top" id="back-to-top" title="Yukarı çık">↑</button>
+
+<script src="assets/js/script.js"></script>
+</body>
+</html>
