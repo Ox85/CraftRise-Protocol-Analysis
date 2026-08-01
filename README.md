@@ -5,9 +5,6 @@ arasındaki Java tarafı ağ protokolünün tam reverse engineering çalışmas�
 şifreleme, obfuscated string sabitleri, genişletilmiş Minecraft handshake paketi ve özel
 Netty JSON kanal protokolü — tümü bytecode analizi ve trafik yakalamayla açığa çıkarıldı.
 
-**Canlı sayfa:** https://Ox85.github.io/CraftRise-Protocol-Analysis/
-**Repo:** https://github.com/Ox85/CraftRise-Protocol-Analysis
-
 ---
 
 ### Protokol Genel Bakış
